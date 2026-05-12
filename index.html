@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Handy Squad — Job Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'DM Sans',system-ui,sans-serif;background:#F0F4F8;color:#1E293B}
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+/* ── CSS VARS ── */
+:root{
+  --blue-50:#EFF6FF;--blue-100:#DBEAFE;--blue-200:#BFDBFE;
+  --blue-500:#3B82F6;--blue-600:#2563EB;--blue-700:#1D4ED8;
+  --blue-800:#1E40AF;--blue-900:#1E3A8A;
+  --slate-50:#F8FAFC;--slate-100:#F1F5F9;--slate-200:#E2E8F0;
+  --slate-400:#94A3B8;--slate-500:#64748B;--slate-600:#475569;
+  --slate-700:#334155;--slate-800:#1E293B;--slate-900:#0F172A;
+  --green-50:#F0FDF4;--green-500:#22C55E;--green-600:#16A34A;--green-700:#15803D;
+  --amber-50:#FFFBEB;--amber-500:#F59E0B;--amber-600:#D97706;
+  --red-50:#FEF2F2;--red-400:#F87171;--red-500:#EF4444;--red-600:#DC2626;
+  --purple-50:#FAF5FF;--purple-500:#A855F7;--purple-600:#9333EA;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.12);
+  --radius:10px;--radius-lg:16px;
+}
+
+/* ── LOADING ── */
+#loading-overlay{position:fixed;inset:0;background:#1E40AF;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
+.loader-logo{font-size:28px;font-weight:700;color:#fff;letter-spacing:-1px}
+.loader-sub{font-size:13px;color:#93C5FD}
+.loader-ring{width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── AUTH SCREEN ── */
+#auth-screen{display:none;position:fixed;inset:0;background:linear-gradient(135deg,#1E3A8A 0%,#1E40AF 50%,#2563EB 100%);align-items:center;justify-content:center;z-index:100}
+.auth-card{background:#fff;border-radius:20px;padding:40px;width:360px;box-shadow:var(--shadow-lg)}
+.auth-logo{text-align:center;margin-bottom:28px}
+.auth-logo-text{font-size:24px;font-weight:700;color:var(--blue-700);letter-spacing:-1px}
+.auth-logo-sub{font-size:12px;color:var(--slate-400);margin-top:2px}
+.auth-label{font-size:12px;font-weight:600;color:var(--slate-600);margin-bottom:5px;display:block}
+.auth-input{width:100%;padding:10px 14px;border:1.5px solid var(--slate-200);border-radius:8px;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:14px}
+.auth-input:focus{border-color:var(--blue-500)}
+.auth-btn{width:100%;padding:12px;background:var(--blue-600);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s}
+.auth-btn:hover{background:var(--blue-700)}
+.auth-btn:disabled{opacity:.6;cursor:not-allowed}
+#auth-error{background:var(--red-50);color:var(--red-600);padding:10px 12px;border-radius:8px;font-size:13px;display:none;margin-bottom:14px}
+
+/* ── APP SHELL ── */
+#app{display:none;height:100vh;overflow:hidden}
+#app.visible{display:flex}
+.sidebar{width:240px;height:100vh;background:#fff;border-right:1px solid var(--slate-200);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;transition:transform .3s}
+.sb-header{padding:20px 16px 14px;border-bottom:1px solid var(--slate-100)}
+.sb-logo{font-size:18px;font-weight:700;color:var(--blue-700);letter-spacing:-0.5px}
+.sb-user{display:flex;align-items:center;gap:10px;margin-top:12px}
+.sb-avatar{width:34px;height:34px;border-radius:50%;background:var(--blue-600);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0}
+.sb-name{font-size:13px;font-weight:600;color:var(--slate-700)}
+.sb-role{font-size:11px;color:var(--slate-400);text-transform:capitalize}
+#sidebar-nav{padding:12px 10px;flex:1}
+.nav-section{font-size:10px;font-weight:700;color:var(--slate-400);letter-spacing:.8px;text-transform:uppercase;padding:10px 6px 4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:var(--slate-600);transition:all .15s;margin-bottom:1px}
+.nav-item:hover{background:var(--blue-50);color:var(--blue-700)}
+.nav-item.active{background:var(--blue-600);color:#fff}
+.nav-item.active .nav-badge{background:rgba(255,255,255,.25);color:#fff}
+.nav-icon{font-size:14px;width:18px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--red-500);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px}
+.nav-badge.warn{background:var(--amber-500)}
+.sb-footer{padding:12px 16px;border-top:1px solid var(--slate-100)}
+.logout-btn{width:100%;padding:9px;border:1.5px solid var(--slate-200);background:#fff;border-radius:8px;font-size:13px;font-weight:500;color:var(--slate-600);cursor:pointer;transition:all .2s}
+.logout-btn:hover{border-color:var(--red-400);color:var(--red-500)}
+
+/* ── MAIN CONTENT ── */
+.main-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:52px;background:#fff;border-bottom:1px solid var(--slate-200);display:flex;align-items:center;gap:12px;padding:0 20px;flex-shrink:0}
+.topbar-title{font-size:16px;font-weight:700;color:var(--slate-800);flex:1}
+.topbar-role{font-size:12px;color:var(--slate-400);background:var(--slate-100);padding:3px 10px;border-radius:20px}
+#hamburger{display:none;background:none;border:none;font-size:20px;cursor:pointer;color:var(--slate-600)}
+#page-content{flex:1;overflow-y:auto;padding:20px}
+
+/* ── CARDS ── */
+.card{background:#fff;border-radius:var(--radius-lg);border:1px solid var(--slate-200);box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:16px}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--slate-100);display:flex;align-items:center;gap:10px}
+.card-title{font-size:14px;font-weight:700;color:var(--slate-800);flex:1}
+.card-body{padding:16px 20px}
+.card-actions{display:flex;gap:8px;align-items:center}
+
+/* ── STAT CARDS ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:var(--radius-lg);border:1px solid var(--slate-200);padding:16px;position:relative;overflow:hidden}
+.stat-accent{position:absolute;top:0;left:0;right:0;height:3px}
+.stat-label{font-size:11px;font-weight:600;color:var(--slate-400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.stat-value{font-size:24px;font-weight:700;color:var(--slate-800);line-height:1}
+.stat-sub{font-size:11px;color:var(--slate-400);margin-top:4px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--blue-600);color:#fff}.btn-primary:hover{background:var(--blue-700)}
+.btn-secondary{background:var(--slate-100);color:var(--slate-700);border:1px solid var(--slate-200)}.btn-secondary:hover{background:var(--slate-200)}
+.btn-success{background:var(--green-600);color:#fff}.btn-success:hover{background:var(--green-700)}
+.btn-danger{background:var(--red-500);color:#fff}.btn-danger:hover{background:var(--red-600)}
+.btn-ghost{background:transparent;color:var(--slate-600);border:1px solid var(--slate-200)}.btn-ghost:hover{background:var(--slate-50)}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── FORM ── */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--slate-600);margin-bottom:5px}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;border:1.5px solid var(--slate-200);border-radius:8px;font-size:13px;outline:none;transition:border-color .2s;background:#fff;font-family:inherit}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--blue-500)}
+.form-textarea{resize:vertical;min-height:80px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid var(--slate-100)}
+.form-hint{font-size:11px;color:var(--slate-400);margin-top:3px}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;font-weight:700;color:var(--slate-500);text-transform:uppercase;letter-spacing:.5px;padding:10px 14px;border-bottom:1px solid var(--slate-200);text-align:left;background:var(--slate-50)}
+td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--slate-100);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--slate-50)}
+
+/* ── STATUS BADGES ── */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge-active{background:var(--green-50);color:var(--green-700)}
+.badge-completed{background:var(--purple-50);color:var(--purple-600)}
+.badge-delayed{background:var(--red-50);color:var(--red-600)}
+.badge-rework{background:var(--amber-50);color:var(--amber-600)}
+.badge-pending{background:var(--slate-100);color:var(--slate-600)}
+
+/* ── JOB ITEM ── */
+.job-row{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--slate-100);cursor:pointer;transition:background .15s}
+.job-row:last-child{border-bottom:none}
+.job-row:hover{background:var(--blue-50)}
+.job-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.job-info{flex:1;min-width:0}
+.job-name{font-size:14px;font-weight:600;color:var(--slate-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-meta{font-size:12px;color:var(--slate-400);margin-top:2px}
+.job-amount{font-size:13px;font-weight:700;color:var(--blue-700);white-space:nowrap}
+
+/* ── PROGRESS BAR ── */
+.progress{height:5px;background:var(--slate-200);border-radius:3px;overflow:hidden;margin-top:4px}
+.progress-fill{height:100%;border-radius:3px;transition:width .3s}
+
+/* ── MODAL ── */
+#modal-backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:500;align-items:center;justify-content:center;padding:16px}
+#modal-backdrop.open{display:flex}
+.modal{background:#fff;border-radius:var(--radius-lg);width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)}
+.modal-header{padding:18px 20px;border-bottom:1px solid var(--slate-100);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:2}
+.modal-title{font-size:16px;font-weight:700;color:var(--slate-800)}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--slate-400);line-height:1;padding:4px}
+.modal-body{padding:20px}
+
+/* ── TOAST ── */
+#toast-container{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:9000}
+.toast{padding:10px 16px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:8px;min-width:220px;animation:slideIn .3s ease}
+.toast.success{background:var(--green-600);color:#fff}
+.toast.error{background:var(--red-500);color:#fff}
+.toast.info{background:var(--blue-600);color:#fff}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+/* ── FINANCE SUMMARY ── */
+.finance-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.fin-item{background:var(--slate-50);border-radius:10px;padding:12px;border:1px solid var(--slate-200)}
+.fin-label{font-size:10px;font-weight:700;color:var(--slate-400);text-transform:uppercase;letter-spacing:.5px}
+.fin-val{font-size:18px;font-weight:700;color:var(--slate-800);margin-top:2px}
+.fin-val.green{color:var(--green-600)}
+.fin-val.red{color:var(--red-500)}
+.fin-sub{font-size:11px;color:var(--slate-400);margin-top:2px}
+
+/* ── DAILY REPORT ITEM ── */
+.report-item{padding:14px 20px;border-bottom:1px solid var(--slate-100)}
+.report-item:last-child{border-bottom:none}
+.report-date{font-size:12px;font-weight:700;color:var(--blue-600);margin-bottom:4px}
+.report-work{font-size:13px;color:var(--slate-700);margin-bottom:8px}
+.report-costs{display:flex;gap:16px;flex-wrap:wrap}
+.cost-pill{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 8px;background:var(--slate-100);border-radius:20px;color:var(--slate-600)}
+
+/* ── EMPTY STATE ── */
+.empty-state{text-align:center;padding:40px 20px}
+.empty-icon{font-size:32px;margin-bottom:8px;opacity:.4}
+.empty-text{font-size:14px;color:var(--slate-400)}
+.empty-hint{font-size:12px;color:var(--slate-300);margin-top:4px}
+
+/* ── IMAGE GRID ── */
+.img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.img-thumb{aspect-ratio:1;border-radius:8px;object-fit:cover;width:100%;border:1px solid var(--slate-200);cursor:pointer;transition:transform .15s}
+.img-thumb:hover{transform:scale(1.03)}
+.img-add{aspect-ratio:1;border-radius:8px;border:2px dashed var(--slate-300);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:4px;color:var(--slate-400);font-size:12px;transition:all .2s}
+.img-add:hover{border-color:var(--blue-400);color:var(--blue-500)}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center}
+.filter-input{flex:1;min-width:140px;padding:8px 12px;border:1.5px solid var(--slate-200);border-radius:8px;font-size:13px;outline:none;transition:border-color .2s}
+.filter-input:focus{border-color:var(--blue-500)}
+.filter-select{padding:8px 10px;border:1.5px solid var(--slate-200);border-radius:8px;font-size:13px;background:#fff;outline:none}
+.filter-select:focus{border-color:var(--blue-500)}
+
+/* ── SECTION DIVIDER ── */
+.section-divider{font-size:11px;font-weight:700;color:var(--slate-400);letter-spacing:.6px;text-transform:uppercase;padding:10px 0 6px;margin-top:4px}
+
+/* ── MOBILE ── */
+#mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50}
+#mob-overlay.open{display:block}
+@media(max-width:768px){
+  #hamburger{display:block}
+  .sidebar{position:fixed;top:0;left:0;height:100vh;z-index:100;transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .finance-grid{grid-template-columns:1fr 1fr}
+  .form-row{grid-template-columns:1fr}
+  #page-content{padding:14px}
+}
+
+/* ── SPINNER ── */
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-overlay">
+  <div class="loader-logo">◈ Handy Squad</div>
+  <div class="loader-ring"></div>
+  <div class="loader-sub">Loading your workspace…</div>
+</div>
+
+<!-- AUTH -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-text">◈ Handy Squad</div>
+      <div class="auth-logo-sub">Job Tracker — Field Management</div>
+    </div>
+    <div id="auth-error"></div>
+    <label class="auth-label">Email</label>
+    <input class="auth-input" type="email" id="login-email" placeholder="you@handysquad.com" autocomplete="email"/>
+    <label class="auth-label">Password</label>
+    <input class="auth-input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"/>
+    <button class="auth-btn" id="login-btn" onclick="handleLogin()">
+      <span id="login-btn-text">Sign In</span>
+    </button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="sidebar" id="sidebar">
+    <div class="sb-header">
+      <div class="sb-logo">◈ Handy Squad</div>
+      <div class="sb-user">
+        <div class="sb-avatar" id="sb-avatar">HS</div>
+        <div>
+          <div class="sb-name" id="sb-name">User</div>
+          <div class="sb-role" id="sb-role">role</div>
+        </div>
+      </div>
+    </div>
+    <div id="sidebar-nav"></div>
+    <div class="sb-footer">
+      <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div id="mob-overlay" onclick="closeSidebar()"></div>
+
+  <div class="main-wrap">
+    <div class="topbar">
+      <button id="hamburger" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <span class="topbar-role" id="topbar-role">role</span>
+    </div>
+    <div id="page-content"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-backdrop" onclick="handleBackdropClick(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Title</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- ── CORE ── -->
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────
+const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─── STATE ────────────────────────────────────────────────────────
+let STATE = {
+  user: null, profile: null, role: null,
+  currentPage: 'dashboard',
+  data: {
+    jobs: [], financials: [], dailyPlans: [],
+    dailyReports: [], jobImages: [], allUsers: []
+  }
+};
+
+let FILTERS = {};
+
+// ─── UTILS ───────────────────────────────────────────────────────
+function esc(s){ if(s===null||s===undefined)return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;'); }
+function fmt(n){ if(!n&&n!==0)return '0'; if(n>=10000000)return (n/10000000).toFixed(1)+'Cr'; if(n>=100000)return (n/100000).toFixed(1)+'L'; if(n>=1000)return (n/1000).toFixed(1)+'K'; return Math.round(n).toLocaleString('en-IN'); }
+function fmtFull(n){ return n?Number(n).toLocaleString('en-IN','₹'):'0'; }
+function fmtDate(d){ if(!d)return '—'; return new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}); }
+function fmtDateTime(d){ if(!d)return '—'; return new Date(d).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
+function statusColor(s){ const m={active:'#22C55E',completed:'#A855F7',delayed:'#EF4444',rework:'#F59E0B'}; return m[s]||'#94A3B8'; }
+function statusClass(s){ const m={active:'badge-active',completed:'badge-completed',delayed:'badge-delayed',rework:'badge-rework'}; return m[s]||'badge-pending'; }
+
+function showToast(msg,type='info'){
+  const tc=document.getElementById('toast-container');
+  const t=document.createElement('div');
+  t.className=`toast ${type}`;
+  const icon=type==='success'?'✓':type==='error'?'✕':'ℹ';
+  t.innerHTML=`<span>${icon}</span>${msg}`;
+  tc.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style.transition='all .3s';setTimeout(()=>t.remove(),300);},3200);
+}
+
+function openModal(title,html){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=html;
+  document.getElementById('modal-backdrop').classList.add('open');
+}
+function closeModal(){ document.getElementById('modal-backdrop').classList.remove('open'); }
+function handleBackdropClick(e){ if(e.target===document.getElementById('modal-backdrop'))closeModal(); }
+
+// ─── BOOT ─────────────────────────────────────────────────────────
+async function boot(){
+  const t=setTimeout(()=>{hideLoading();showAuthScreen();},6000);
+  try{
+    const {data:{session},error}=await sb.auth.getSession();
+    clearTimeout(t);
+    if(error||!session){await sb.auth.signOut();showAuthScreen();}
+    else{STATE.user=session.user;await loadProfile();showApp();}
+  }catch(e){clearTimeout(t);await sb.auth.signOut();showAuthScreen();}
+  hideLoading();
+}
+window.addEventListener('DOMContentLoaded',boot);
+
+sb.auth.onAuthStateChange(async(ev,session)=>{
+  if(ev==='SIGNED_OUT'){STATE.user=null;STATE.profile=null;STATE.role=null;showAuthScreen();}
+});
+
+function hideLoading(){document.getElementById('loading-overlay').style.display='none';}
+function showAuthScreen(){document.getElementById('auth-screen').style.display='flex';document.getElementById('app').classList.remove('visible');}
+function showApp(){
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').classList.add('visible');
+  buildSidebar();renderPage('dashboard');loadAllData();
+}
+
+async function loadProfile(){
+  const {data}=await sb.from('users').select('*').eq('auth_id',STATE.user.id).maybeSingle();
+  if(data){STATE.profile=data;STATE.role=data.role;return;}
+  const name=STATE.user.user_metadata?.name||STATE.user.email.split('@')[0];
+  STATE.profile={id:STATE.user.id,name,role:'scheduling',email:STATE.user.email};
+  STATE.role='scheduling';
+}
+
+async function handleLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  const btn=document.getElementById('login-btn');
+  const txt=document.getElementById('login-btn-text');
+  document.getElementById('auth-error').style.display='none';
+  if(!email||!pass){showAuthError('Enter email and password.');return;}
+  btn.disabled=true;txt.innerHTML='<div class="spinner"></div>';
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){showAuthError(error.message);btn.disabled=false;txt.textContent='Sign In';return;}
+  STATE.user=data.session.user;await loadProfile();showApp();
+}
+function showAuthError(m){const el=document.getElementById('auth-error');el.textContent=m;el.style.display='block';}
+async function handleLogout(){await sb.auth.signOut();}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('auth-screen').style.display!=='none')handleLogin();});
+
+// ─── SIDEBAR / MOBILE ─────────────────────────────────────────────
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('mob-overlay').classList.toggle('open');}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('mob-overlay').classList.remove('open');}
+
+const NAV_CONFIG={
+  scheduling:[
+    {section:'Overview',items:[{id:'dashboard',icon:'◈',label:'Dashboard'}]},
+    {section:'Jobs',items:[
+      {id:'jobs',icon:'▣',label:'All Jobs'},
+      {id:'new-job',icon:'+',label:'New Job'}
+    ]},
+    {section:'Finance',items:[
+      {id:'financials',icon:'₹',label:'Financials'},
+      {id:'daily-reports',icon:'✓',label:'Daily Reports'}
+    ]}
+  ],
+  manager:[
+    {section:'Overview',items:[{id:'dashboard',icon:'◈',label:'Dashboard'}]},
+    {section:'My Jobs',items:[
+      {id:'jobs',icon:'▣',label:'My Jobs'}
+    ]},
+    {section:'Execution',items:[
+      {id:'daily-plans',icon:'◷',label:'Daily Plans'},
+      {id:'daily-reports',icon:'✓',label:'Daily Reports'}
+    ]}
+  ]
+};
+
+function buildSidebar(){
+  const role=STATE.role;
+  document.getElementById('sb-name').textContent=STATE.profile?.name||'User';
+  document.getElementById('sb-role').textContent=(role||'').charAt(0).toUpperCase()+(role||'').slice(1);
+  document.getElementById('sb-avatar').textContent=(STATE.profile?.name||'HS').substring(0,2).toUpperCase();
+  document.getElementById('topbar-role').textContent=(role||'').charAt(0).toUpperCase()+(role||'').slice(1);
+  const nav=NAV_CONFIG[role]||NAV_CONFIG.scheduling;
+  let html='';
+  nav.forEach(sec=>{
+    html+=`<div class="nav-section">${sec.section}</div>`;
+    sec.items.forEach(item=>{
+      html+=`<div class="nav-item${STATE.currentPage===item.id?' active':''}" onclick="renderPage('${item.id}')">
+        <span class="nav-icon">${item.icon}</span><span>${item.label}</span></div>`;
+    });
+  });
+  document.getElementById('sidebar-nav').innerHTML=html;
+}
+
+// ─── DATA LOAD ────────────────────────────────────────────────────
+async function loadAllData(){
+  try{
+    const [jobs,fins,plans,reports,images,users]=await Promise.all([
+      sb.from('jobs').select('*, users!jobs_assigned_manager_id_fkey(name)').order('created_at',{ascending:false}),
+      sb.from('job_financials').select('*').order('created_at',{ascending:false}),
+      sb.from('daily_plans').select('*').order('plan_date',{ascending:false}),
+      sb.from('daily_reports').select('*').order('report_date',{ascending:false}),
+      sb.from('job_images').select('*').order('created_at',{ascending:false}),
+      sb.from('users').select('*').order('name',{ascending:true})
+    ]);
+    STATE.data.jobs=jobs.data||[];
+    STATE.data.financials=fins.data||[];
+    STATE.data.dailyPlans=plans.data||[];
+    STATE.data.dailyReports=reports.data||[];
+    STATE.data.jobImages=images.data||[];
+    STATE.data.allUsers=users.data||[];
+    renderPage(STATE.currentPage);
+  }catch(e){console.error(e);showToast('Data load failed.','error');}
+}
+
+// ─── PAGE ROUTER ─────────────────────────────────────────────────
+const PAGE_TITLES={'dashboard':'Dashboard','jobs':'Jobs','new-job':'New Job','financials':'Financials','daily-plans':'Daily Plans','daily-reports':'Daily Reports'};
+
+function renderPage(pageId){
+  STATE.currentPage=pageId;buildSidebar();
+  document.getElementById('topbar-title').textContent=PAGE_TITLES[pageId]||pageId;
+  const el=document.getElementById('page-content');
+  const pages={
+    'dashboard':renderDashboard,'jobs':renderJobs,'new-job':renderNewJob,
+    'financials':renderFinancials,'daily-plans':renderDailyPlans,'daily-reports':renderDailyReports
+  };
+  el.innerHTML=(pages[pageId]||renderDashboard)();
+  closeSidebar();
+}
+</script>
+
+<!-- ── PAGES ── -->
+<script>
+// ─── DASHBOARD ────────────────────────────────────────────────────
+function renderDashboard(){
+  const d=STATE.data;
+  const activeJobs=d.jobs.filter(j=>j.status==='active').length;
+  const completedJobs=d.jobs.filter(j=>j.status==='completed').length;
+  const delayedJobs=d.jobs.filter(j=>j.status==='delayed').length;
+  const totalRevenue=d.financials.reduce((s,f)=>s+(f.total_amount||0),0);
+  const totalActual=d.financials.reduce((s,f)=>s+(f.material_actual||0)+(f.labour_actual||0)+(f.other_actual||0),0);
+
+  // recent jobs
+  const recent=d.jobs.slice(0,5);
+
+  const isManager=STATE.role==='manager';
+  const myJobs=isManager?d.jobs.filter(j=>j.assigned_manager_id===STATE.profile?.id):d.jobs;
+  const todayStr=new Date().toISOString().slice(0,10);
+  const todayReports=d.dailyReports.filter(r=>r.report_date===todayStr).length;
+
+  return `
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-accent" style="background:#22C55E"></div><div class="stat-label">Active Jobs</div><div class="stat-value">${activeJobs}</div><div class="stat-sub">In progress</div></div>
+    <div class="stat-card"><div class="stat-accent" style="background:#A855F7"></div><div class="stat-label">Completed</div><div class="stat-value">${completedJobs}</div><div class="stat-sub">All time</div></div>
+    <div class="stat-card"><div class="stat-accent" style="background:#EF4444"></div><div class="stat-label">Delayed</div><div class="stat-value">${delayedJobs}</div><div class="stat-sub">Need attention</div></div>
+    <div class="stat-card"><div class="stat-accent" style="background:#3B82F6"></div><div class="stat-label">Today Reports</div><div class="stat-value">${todayReports}</div><div class="stat-sub">Filed today</div></div>
+    ${!isManager?`
+    <div class="stat-card"><div class="stat-accent" style="background:#F59E0B"></div><div class="stat-label">Total Contract</div><div class="stat-value" style="font-size:18px">₹${fmt(totalRevenue)}</div><div class="stat-sub">All jobs</div></div>
+    <div class="stat-card"><div class="stat-accent" style="background:#06B6D4"></div><div class="stat-label">Actual Spend</div><div class="stat-value" style="font-size:18px">₹${fmt(totalActual)}</div><div class="stat-sub">Running total</div></div>
+    `:''}
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Recent Jobs</div>
+      <button class="btn btn-sm btn-primary" onclick="renderPage('jobs')">View All</button>
+    </div>
+    ${myJobs.length===0?`<div class="card-body"><div class="empty-state"><div class="empty-icon">▣</div><div class="empty-text">No jobs yet</div></div></div>`
+    :`<div>${myJobs.slice(0,6).map(j=>`
+      <div class="job-row" onclick="openJobDetail('${j.id}')">
+        <div class="job-dot" style="background:${statusColor(j.status)}"></div>
+        <div class="job-info">
+          <div class="job-name">${esc(j.customer_name||'—')}</div>
+          <div class="job-meta">${esc(j.location_text||'No location')} · ${fmtDate(j.created_at)}</div>
+        </div>
+        <span class="badge ${statusClass(j.status)}">${j.status}</span>
+      </div>`).join('')}</div>`}
+  </div>`;
+}
+
+// ─── JOBS LIST ────────────────────────────────────────────────────
+function renderJobs(){
+  const isManager=STATE.role==='manager';
+  let jobs=isManager?STATE.data.jobs.filter(j=>j.assigned_manager_id===STATE.profile?.id):STATE.data.jobs;
+  const fk='jobs';
+  if(!FILTERS[fk])FILTERS[fk]={};
+  const f=FILTERS[fk];
+  if(f.search){const q=f.search.toLowerCase();jobs=jobs.filter(j=>(j.customer_name||'').toLowerCase().includes(q)||(j.location_text||'').toLowerCase().includes(q));}
+  if(f.status)jobs=jobs.filter(j=>j.status===f.status);
+
+  return `
+  <div class="filter-bar">
+    <input class="filter-input" placeholder="Search jobs…" value="${f.search||''}" oninput="setFilter('jobs','search',this.value)"/>
+    <select class="filter-select" onchange="setFilter('jobs','status',this.value)">
+      <option value="">All statuses</option>
+      ${['active','completed','delayed','rework'].map(s=>`<option value="${s}"${f.status===s?' selected':''}>${s}</option>`).join('')}
+    </select>
+    ${f.search||f.status?`<button class="btn btn-sm btn-ghost" onclick="clearFilters('jobs')">✕ Clear</button>`:''}
+    ${!isManager?`<button class="btn btn-sm btn-primary" onclick="renderPage('new-job')" style="margin-left:auto">+ New Job</button>`:''}
+  </div>
+  <div class="card">
+    ${jobs.length===0?`<div class="card-body"><div class="empty-state"><div class="empty-icon">▣</div><div class="empty-text">No jobs found</div></div></div>`
+    :`<div>${jobs.map(j=>{
+      const fin=STATE.data.financials.find(f=>f.job_id===j.id);
+      return `<div class="job-row" onclick="openJobDetail('${j.id}')">
+        <div class="job-dot" style="background:${statusColor(j.status)}"></div>
+        <div class="job-info">
+          <div class="job-name">${esc(j.customer_name||'—')}</div>
+          <div class="job-meta">${esc(j.location_text||'No location')} · ${j.users?.name?`Mgr: ${esc(j.users.name)} · `:''}Started ${fmtDate(j.start_date||j.created_at)}</div>
+          ${fin?`<div class="progress" style="max-width:200px"><div class="progress-fill" style="width:${calcProgress(j)}%;background:${statusColor(j.status)}"></div></div>`:''}
+        </div>
+        <div style="text-align:right">
+          ${fin?`<div class="job-amount">₹${fmt(fin.total_amount||0)}</div>`:''}
+          <span class="badge ${statusClass(j.status)}" style="margin-top:4px">${j.status}</span>
+        </div>
+      </div>`;
+    }).join('')}</div>`}
+  </div>`;
+}
+
+function calcProgress(j){
+  const m={active:50,completed:100,delayed:35,rework:60};return m[j.status]||20;
+}
+
+function setFilter(k,f,v){if(!FILTERS[k])FILTERS[k]={};FILTERS[k][f]=v;renderPage(STATE.currentPage);}
+function clearFilters(k){FILTERS[k]={};renderPage(STATE.currentPage);}
+
+// ─── NEW JOB FORM ─────────────────────────────────────────────────
+function renderNewJob(){
+  if(STATE.role!=='scheduling')return `<div class="card"><div class="card-body"><div class="empty-state"><div class="empty-icon">🔒</div><div class="empty-text">Scheduling team only</div></div></div></div>`;
+  const managers=STATE.data.allUsers.filter(u=>u.role==='manager');
+  return `
+  <div class="card" style="max-width:640px">
+    <div class="card-header"><div class="card-title">Create New Job</div></div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Customer Name *</label>
+          <input class="form-input" id="nj-name" placeholder="Customer full name"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input class="form-input" id="nj-phone" placeholder="+91 …"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Location</label>
+          <input class="form-input" id="nj-location" placeholder="Address / area"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Google Maps Link</label>
+          <input class="form-input" id="nj-maplink" placeholder="https://maps.google.com/…"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Work Details *</label>
+        <textarea class="form-textarea" id="nj-details" placeholder="Describe the work to be done…" style="min-height:100px"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Assign Manager</label>
+          <select class="form-select" id="nj-manager">
+            <option value="">— Unassigned —</option>
+            ${managers.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Date</label>
+          <input class="form-input" type="date" id="nj-start"/>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="renderPage('jobs')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitNewJob()">Create Job</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function submitNewJob(){
+  const name=document.getElementById('nj-name').value.trim();
+  const details=document.getElementById('nj-details').value.trim();
+  if(!name||!details){showToast('Customer name and work details required.','error');return;}
+  const {data,error}=await sb.from('jobs').insert({
+    customer_name:name,
+    customer_phone:document.getElementById('nj-phone').value.trim()||null,
+    location_text:document.getElementById('nj-location').value.trim()||null,
+    location_link:document.getElementById('nj-maplink').value.trim()||null,
+    work_details:details,
+    assigned_manager_id:document.getElementById('nj-manager').value||null,
+    start_date:document.getElementById('nj-start').value||null,
+    status:'active',
+    created_by:STATE.profile?.id
+  }).select().single();
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Job created!','success');
+  await loadAllData();
+  openJobDetail(data.id);
+}
+
+// ─── JOB DETAIL MODAL ─────────────────────────────────────────────
+function openJobDetail(jobId){
+  const j=STATE.data.jobs.find(x=>x.id===jobId);
+  if(!j)return;
+  const fin=STATE.data.financials.find(f=>f.job_id===jobId);
+  const imgs=STATE.data.jobImages.filter(i=>i.job_id===jobId);
+  const reports=STATE.data.dailyReports.filter(r=>r.job_id===jobId).sort((a,b)=>a.report_date.localeCompare(b.report_date));
+  const isScheduling=STATE.role==='scheduling';
+  const isManager=STATE.role==='manager';
+
+  const actualTotal=reports.reduce((s,r)=>s+(r.material_cost||0)+(r.labour_cost||0)+(r.other_cost||0),0);
+  const profit=fin?((fin.total_amount||0)-((fin.total_amount||0)*(fin.gst_rate||18)/100)-(fin.material_actual||0)-(fin.labour_actual||0)-(fin.other_actual||0)):0;
+
+  const html=`
+  <!-- Job Header -->
+  <div style="background:var(--blue-50);border-radius:10px;padding:14px;margin-bottom:16px">
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1">
+        <div style="font-size:16px;font-weight:700;color:var(--slate-800)">${esc(j.customer_name)}</div>
+        <div style="font-size:12px;color:var(--slate-500);margin-top:2px">${esc(j.location_text||'No location')}</div>
+        ${j.location_link?`<a href="${esc(j.location_link)}" target="_blank" style="font-size:11px;color:var(--blue-600)">📍 View Map</a>`:''}
+      </div>
+      <span class="badge ${statusClass(j.status)}">${j.status}</span>
+    </div>
+    <div style="margin-top:10px;font-size:13px;color:var(--slate-600)">${esc(j.work_details||'No details')}</div>
+    ${j.users?.name?`<div style="font-size:11px;color:var(--slate-400);margin-top:6px">Manager: ${esc(j.users.name)}</div>`:''}
+  </div>
+
+  <!-- Status Actions -->
+  ${isScheduling?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    ${['active','completed','delayed','rework'].map(s=>`<button class="btn btn-sm ${j.status===s?'btn-primary':'btn-ghost'}" onclick="updateJobStatus('${j.id}','${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('')}
+    <button class="btn btn-sm btn-ghost" onclick="closeModal();renderPage('new-job')">Edit</button>
+    <button class="btn btn-sm btn-success" onclick="downloadAdvanceForm('${j.id}')" style="margin-left:auto">⬇ Advance Form</button>
+    <button class="btn btn-sm btn-primary" onclick="downloadJobPDF('${j.id}')">⬇ Full Report PDF</button>
+  </div>`:''}
+  ${isManager?`<div style="display:flex;gap:8px;margin-bottom:14px">
+    <button class="btn btn-sm btn-primary" onclick="closeModal();openDailyPlanModal('${j.id}')">+ Daily Plan</button>
+    <button class="btn btn-sm btn-success" onclick="closeModal();openDailyReportModal('${j.id}')">+ Daily Report</button>
+    <button class="btn btn-sm btn-ghost" onclick="downloadJobPDF('${j.id}')" style="margin-left:auto">⬇ PDF</button>
+  </div>`:''}
+
+  <!-- Financials -->
+  <div class="section-divider">Financial Summary</div>
+  ${fin?`
+  <div class="finance-grid">
+    <div class="fin-item"><div class="fin-label">Contract Value</div><div class="fin-val">₹${fmt(fin.total_amount||0)}</div></div>
+    <div class="fin-item"><div class="fin-label">GST (${fin.gst_rate||18}%)</div><div class="fin-val red">₹${fmt((fin.total_amount||0)*(fin.gst_rate||18)/100)}</div></div>
+    <div class="fin-item"><div class="fin-label">Expected Profit</div><div class="fin-val green">₹${fmt(fin.expected_profit||0)}</div></div>
+    <div class="fin-item"><div class="fin-label">Mat. Expected</div><div class="fin-val" style="font-size:14px">₹${fmt(fin.material_expected||0)}</div><div class="fin-sub">Actual: ₹${fmt(fin.material_actual||0)}</div></div>
+    <div class="fin-item"><div class="fin-label">Labour Expected</div><div class="fin-val" style="font-size:14px">₹${fmt(fin.labour_expected||0)}</div><div class="fin-sub">Actual: ₹${fmt(fin.labour_actual||0)}</div></div>
+    <div class="fin-item"><div class="fin-label">Other Expected</div><div class="fin-val" style="font-size:14px">₹${fmt(fin.other_expected||0)}</div><div class="fin-sub">Actual: ₹${fmt(fin.other_actual||0)}</div></div>
+  </div>
+  <div style="background:${profit>=0?'var(--green-50)':'var(--red-50)'};border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <span style="font-size:12px;font-weight:600;color:${profit>=0?'var(--green-700)':'var(--red-600)'}">Actual Profit (running)</span>
+    <span style="font-size:20px;font-weight:700;color:${profit>=0?'var(--green-600)':'var(--red-500)'}">₹${fmt(profit)}</span>
+  </div>
+  ${isScheduling?`<button class="btn btn-sm btn-ghost" onclick="openFinancialEditModal('${j.id}')">✏ Edit Financials</button>`:''}
+  `:`
+  <div style="background:var(--amber-50);border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;color:var(--amber-600)">
+    No financials entered yet.
+    ${isScheduling?`<button class="btn btn-sm btn-primary" onclick="openFinancialEditModal('${j.id}')" style="margin-left:8px">+ Add Financials</button>`:''}
+  </div>`}
+
+  <!-- Quote Images -->
+  <div class="section-divider">Quote / Reference Images</div>
+  <div class="img-grid" style="margin-bottom:16px">
+    ${imgs.map(i=>`<img class="img-thumb" src="${esc(i.url)}" title="${esc(i.caption||'')}" onclick="window.open('${esc(i.url)}','_blank')"/>`).join('')}
+    ${isScheduling?`<div class="img-add" onclick="openImageUpload('${j.id}')"><span style="font-size:20px">+</span><span>Add Image</span></div>`:''}
+  </div>
+  ${imgs.length===0&&!isScheduling?`<div style="font-size:12px;color:var(--slate-400)">No images uploaded.</div>`:''}
+
+  <!-- Daily Reports -->
+  <div class="section-divider">Daily Reports (${reports.length})</div>
+  ${reports.length===0?`<div class="empty-state" style="padding:20px"><div class="empty-icon">✓</div><div class="empty-text">No daily reports yet</div></div>`
+  :`<div class="card" style="margin-bottom:0">
+    ${reports.map(r=>`
+    <div class="report-item">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="report-date">${fmtDate(r.report_date)}</div>
+        <div class="report-costs">
+          <span class="cost-pill">Mat ₹${fmt(r.material_cost||0)}</span>
+          <span class="cost-pill">Lab ₹${fmt(r.labour_cost||0)}</span>
+          <span class="cost-pill">Other ₹${fmt(r.other_cost||0)}</span>
+          ${isScheduling?`<button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:11px" onclick="editReportFinance('${r.id}','${j.id}')">✏</button>`:''}
+        </div>
+      </div>
+      <div class="report-work">${esc(r.work_done)}</div>
+      <div style="font-size:11px;color:var(--slate-400)">Workers: ${r.workers_present||0} · ${r.notes?esc(r.notes):''}</div>
+    </div>`).join('')}
+  </div>`}
+  `;
+
+  openModal(j.customer_name||'Job Detail',html);
+}
+
+async function updateJobStatus(jobId,status){
+  const {error}=await sb.from('jobs').update({status,updated_at:new Date().toISOString()}).eq('id',jobId);
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Status updated!','success');
+  closeModal();await loadAllData();
+}
+
+// ─── FINANCIALS PAGE ──────────────────────────────────────────────
+function renderFinancials(){
+  if(STATE.role!=='scheduling')return`<div class="card"><div class="card-body"><div class="empty-state"><div class="empty-icon">🔒</div><div class="empty-text">Scheduling team only</div></div></div></div>`;
+  const jobs=STATE.data.jobs;
+  return `
+  <div class="card">
+    <div class="card-header"><div class="card-title">Job Financials Overview</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Customer</th><th>Status</th><th>Contract</th><th>Expected Profit</th><th>Actual Spend</th><th>Running Profit</th><th></th></tr></thead>
+        <tbody>
+          ${jobs.map(j=>{
+            const f=STATE.data.financials.find(x=>x.job_id===j.id);
+            if(!f)return `<tr><td>${esc(j.customer_name)}</td><td><span class="badge ${statusClass(j.status)}">${j.status}</span></td><td colspan="4" style="color:var(--slate-400);font-size:12px">No financials</td><td><button class="btn btn-sm btn-primary" onclick="openFinancialEditModal('${j.id}')">+ Add</button></td></tr>`;
+            const actualSpend=(f.material_actual||0)+(f.labour_actual||0)+(f.other_actual||0);
+            const netValue=(f.total_amount||0)-((f.total_amount||0)*(f.gst_rate||18)/100);
+            const runningProfit=netValue-actualSpend;
+            return `<tr>
+              <td><div style="font-weight:600">${esc(j.customer_name)}</div><div style="font-size:11px;color:var(--slate-400)">${esc(j.location_text||'')}</div></td>
+              <td><span class="badge ${statusClass(j.status)}">${j.status}</span></td>
+              <td style="font-weight:600">₹${fmt(f.total_amount||0)}</td>
+              <td style="color:var(--green-600);font-weight:600">₹${fmt(f.expected_profit||0)}</td>
+              <td>₹${fmt(actualSpend)}</td>
+              <td style="font-weight:700;color:${runningProfit>=0?'var(--green-600)':'var(--red-500)'}">₹${fmt(runningProfit)}</td>
+              <td><button class="btn btn-sm btn-ghost" onclick="openJobDetail('${j.id}')">View</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ─── FINANCIAL EDIT MODAL ─────────────────────────────────────────
+function openFinancialEditModal(jobId){
+  const j=STATE.data.jobs.find(x=>x.id===jobId);
+  const f=STATE.data.financials.find(x=>x.job_id===jobId)||{};
+  openModal('Edit Financials — '+j?.customer_name,`
+    <div class="form-group">
+      <label class="form-label">Total Contract Amount (₹)</label>
+      <input class="form-input" id="fe-total" type="number" value="${f.total_amount||''}" placeholder="0"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Material Expected (₹)</label>
+        <input class="form-input" id="fe-mat" type="number" value="${f.material_expected||''}" placeholder="0"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Labour Expected (₹)</label>
+        <input class="form-input" id="fe-lab" type="number" value="${f.labour_expected||''}" placeholder="0"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Other Expected (₹)</label>
+        <input class="form-input" id="fe-other" type="number" value="${f.other_expected||''}" placeholder="0"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">GST Rate (%)</label>
+        <input class="form-input" id="fe-gst" type="number" value="${f.gst_rate||18}" placeholder="18"/>
+      </div>
+    </div>
+    <div id="fe-preview" style="background:var(--blue-50);border-radius:8px;padding:12px;font-size:12px;color:var(--blue-700);margin-bottom:8px"></div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFinancials('${jobId}','${f.id||''}')">Save</button>
+    </div>
+    <script>
+      ['fe-total','fe-mat','fe-lab','fe-other','fe-gst'].forEach(id=>document.getElementById(id)?.addEventListener('input',updateFinPreview));
+      function updateFinPreview(){
+        const total=parseFloat(document.getElementById('fe-total').value)||0;
+        const mat=parseFloat(document.getElementById('fe-mat').value)||0;
+        const lab=parseFloat(document.getElementById('fe-lab').value)||0;
+        const other=parseFloat(document.getElementById('fe-other').value)||0;
+        const gst=parseFloat(document.getElementById('fe-gst').value)||18;
+        const netVal=total-(total*gst/100);
+        const expProfit=netVal-mat-lab-other;
+        document.getElementById('fe-preview').innerHTML=
+          'Net after GST: <b>₹'+netVal.toLocaleString('en-IN')+'</b> &nbsp;|&nbsp; Expected Profit: <b style="color:'+
+          (expProfit>=0?'var(--green-600)':'var(--red-500)')+'">₹'+expProfit.toLocaleString('en-IN')+'</b>';
+      }
+      updateFinPreview();
+    <\/script>
+  `);
+}
+
+async function saveFinancials(jobId,existingId){
+  const payload={
+    job_id:jobId,
+    total_amount:parseFloat(document.getElementById('fe-total').value)||0,
+    material_expected:parseFloat(document.getElementById('fe-mat').value)||0,
+    labour_expected:parseFloat(document.getElementById('fe-lab').value)||0,
+    other_expected:parseFloat(document.getElementById('fe-other').value)||0,
+    gst_rate:parseFloat(document.getElementById('fe-gst').value)||18,
+    updated_by:STATE.profile?.id
+  };
+  let error;
+  if(existingId){({error}=await sb.from('job_financials').update({...payload,updated_at:new Date().toISOString()}).eq('id',existingId));}
+  else{({error}=await sb.from('job_financials').insert({...payload,created_by:STATE.profile?.id}));}
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Financials saved!','success');
+  closeModal();await loadAllData();
+}
+
+// ─── IMAGE UPLOAD ─────────────────────────────────────────────────
+function openImageUpload(jobId){
+  openModal('Upload Quote Image',`
+    <div class="form-group">
+      <label class="form-label">Select Image</label>
+      <input class="form-input" type="file" id="img-file" accept="image/*"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Caption (optional)</label>
+      <input class="form-input" id="img-caption" placeholder="e.g. Floor plan, elevation…"/>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="img-upload-btn" onclick="uploadImage('${jobId}')">Upload</button>
+    </div>`);
+}
+
+async function uploadImage(jobId){
+  const file=document.getElementById('img-file').files[0];
+  if(!file){showToast('Select an image first.','error');return;}
+  document.getElementById('img-upload-btn').disabled=true;
+  document.getElementById('img-upload-btn').textContent='Uploading…';
+  const path=`${jobId}/${Date.now()}_${file.name.replace(/\s/g,'_')}`;
+  const {data:upData,error:upErr}=await sb.storage.from('job-images').upload(path,file,{upsert:true});
+  if(upErr){showToast('Upload error: '+upErr.message,'error');return;}
+  const {data:{publicUrl}}=sb.storage.from('job-images').getPublicUrl(path);
+  const {error}=await sb.from('job_images').insert({job_id:jobId,url:publicUrl,caption:document.getElementById('img-caption').value.trim()||null,uploaded_by:STATE.profile?.id});
+  if(error){showToast('DB error: '+error.message,'error');return;}
+  showToast('Image uploaded!','success');
+  closeModal();await loadAllData();openJobDetail(jobId);
+}
+
+// ─── DAILY PLANS ──────────────────────────────────────────────────
+function renderDailyPlans(){
+  const isManager=STATE.role==='manager';
+  let plans=isManager?STATE.data.dailyPlans.filter(p=>p.manager_id===STATE.profile?.id):STATE.data.dailyPlans;
+  plans=plans.slice(0,30);
+  return `
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Daily Plans</div>
+      ${isManager?`<button class="btn btn-sm btn-primary" onclick="openDailyPlanModal()">+ New Plan</button>`:''}
+    </div>
+    ${plans.length===0?`<div class="card-body"><div class="empty-state"><div class="empty-icon">◷</div><div class="empty-text">No plans yet</div></div></div>`
+    :`<div>${plans.map(p=>{
+      const j=STATE.data.jobs.find(x=>x.id===p.job_id);
+      return `<div style="padding:12px 20px;border-bottom:1px solid var(--slate-100)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:600;font-size:13px">${esc(j?.customer_name||'Unknown job')}</div>
+            <div style="font-size:11px;color:var(--slate-400);margin-top:2px">${fmtDate(p.plan_date)} · Workers: ${p.workers||0}</div>
+          </div>
+          <span style="font-size:11px;color:var(--blue-600);font-weight:600">${fmtDate(p.plan_date)}</span>
+        </div>
+        <div style="font-size:13px;color:var(--slate-600);margin-top:6px">${esc(p.plan_text)}</div>
+      </div>`;
+    }).join('')}</div>`}
+  </div>`;
+}
+
+function openDailyPlanModal(prefillJobId){
+  const myJobs=STATE.data.jobs.filter(j=>j.assigned_manager_id===STATE.profile?.id&&j.status==='active');
+  const today=new Date().toISOString().slice(0,10);
+  openModal('Add Daily Plan',`
+    <div class="form-group">
+      <label class="form-label">Job</label>
+      <select class="form-select" id="dp-job">
+        <option value="">— Select Job —</option>
+        ${myJobs.map(j=>`<option value="${j.id}"${j.id===prefillJobId?' selected':''}>${esc(j.customer_name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="dp-date" value="${today}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Workers</label>
+        <input class="form-input" type="number" id="dp-workers" value="0" min="0"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Plan for the day</label>
+      <textarea class="form-textarea" id="dp-text" placeholder="What work is planned for today?"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDailyPlan()">Save Plan</button>
+    </div>`);
+}
+
+async function saveDailyPlan(){
+  const jobId=document.getElementById('dp-job').value;
+  const date=document.getElementById('dp-date').value;
+  const text=document.getElementById('dp-text').value.trim();
+  if(!jobId||!date||!text){showToast('Fill all fields.','error');return;}
+  const {error}=await sb.from('daily_plans').upsert({job_id:jobId,plan_date:date,plan_text:text,workers:parseInt(document.getElementById('dp-workers').value)||0,manager_id:STATE.profile?.id},{onConflict:'job_id,plan_date'});
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Plan saved!','success');closeModal();await loadAllData();
+}
+
+// ─── DAILY REPORTS ────────────────────────────────────────────────
+function renderDailyReports(){
+  const isManager=STATE.role==='manager';
+  const isScheduling=STATE.role==='scheduling';
+  let reports=isManager?STATE.data.dailyReports.filter(r=>r.manager_id===STATE.profile?.id):STATE.data.dailyReports;
+  reports=reports.slice(0,50);
+  return `
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Daily Reports</div>
+      ${isManager?`<button class="btn btn-sm btn-primary" onclick="openDailyReportModal()">+ New Report</button>`:''}
+    </div>
+    ${reports.length===0?`<div class="card-body"><div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">No reports yet</div></div></div>`
+    :`<div>${reports.map(r=>{
+      const j=STATE.data.jobs.find(x=>x.id===r.job_id);
+      const total=(r.material_cost||0)+(r.labour_cost||0)+(r.other_cost||0);
+      return `<div class="report-item">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div class="report-date">${fmtDate(r.report_date)}</div>
+            <div style="font-weight:600;font-size:13px">${esc(j?.customer_name||'Unknown')}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700;font-size:14px;color:var(--slate-700)">₹${fmt(total)}</div>
+            ${isScheduling?`<button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 7px;margin-top:4px" onclick="editReportFinance('${r.id}','${r.job_id}')">✏ Edit Finance</button>`:''}
+          </div>
+        </div>
+        <div class="report-work">${esc(r.work_done)}</div>
+        <div class="report-costs">
+          <span class="cost-pill">Mat ₹${fmt(r.material_cost||0)}</span>
+          <span class="cost-pill">Lab ₹${fmt(r.labour_cost||0)}</span>
+          <span class="cost-pill">Other ₹${fmt(r.other_cost||0)}</span>
+          <span class="cost-pill">Workers ${r.workers_present||0}</span>
+        </div>
+        ${r.notes?`<div style="font-size:11px;color:var(--slate-400);margin-top:6px">${esc(r.notes)}</div>`:''}
+      </div>`;
+    }).join('')}</div>`}
+  </div>`;
+}
+
+function openDailyReportModal(prefillJobId){
+  const myJobs=STATE.data.jobs.filter(j=>j.assigned_manager_id===STATE.profile?.id&&j.status==='active');
+  const today=new Date().toISOString().slice(0,10);
+  openModal('Add Daily Report',`
+    <div class="form-group">
+      <label class="form-label">Job</label>
+      <select class="form-select" id="dr-job">
+        <option value="">— Select Job —</option>
+        ${myJobs.map(j=>`<option value="${j.id}"${j.id===prefillJobId?' selected':''}>${esc(j.customer_name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="dr-date" value="${today}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Workers Present</label>
+        <input class="form-input" type="number" id="dr-workers" value="0" min="0"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Work Done Today *</label>
+      <textarea class="form-textarea" id="dr-work" placeholder="Describe work completed today…"></textarea>
+    </div>
+    <div class="section-divider">Today's Expenses</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Material Cost (₹)</label>
+        <input class="form-input" type="number" id="dr-mat" value="0" min="0"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Labour Cost (₹)</label>
+        <input class="form-input" type="number" id="dr-lab" value="0" min="0"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Other Cost (₹)</label>
+        <input class="form-input" type="number" id="dr-other" value="0" min="0"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input class="form-input" id="dr-notes" placeholder="Optional notes…"/>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDailyReport()">Submit Report</button>
+    </div>`);
+}
+
+async function saveDailyReport(){
+  const jobId=document.getElementById('dr-job').value;
+  const date=document.getElementById('dr-date').value;
+  const work=document.getElementById('dr-work').value.trim();
+  if(!jobId||!date||!work){showToast('Job, date and work done are required.','error');return;}
+  const {error}=await sb.from('daily_reports').upsert({
+    job_id:jobId,report_date:date,work_done:work,
+    workers_present:parseInt(document.getElementById('dr-workers').value)||0,
+    material_cost:parseFloat(document.getElementById('dr-mat').value)||0,
+    labour_cost:parseFloat(document.getElementById('dr-lab').value)||0,
+    other_cost:parseFloat(document.getElementById('dr-other').value)||0,
+    notes:document.getElementById('dr-notes').value.trim()||null,
+    manager_id:STATE.profile?.id,
+    updated_at:new Date().toISOString()
+  },{onConflict:'job_id,report_date'});
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Report submitted!','success');closeModal();await loadAllData();
+}
+
+function editReportFinance(reportId,jobId){
+  const r=STATE.data.dailyReports.find(x=>x.id===reportId);
+  if(!r)return;
+  openModal('Edit Finance — '+fmtDate(r.report_date),`
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Material Cost (₹)</label>
+        <input class="form-input" type="number" id="ef-mat" value="${r.material_cost||0}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Labour Cost (₹)</label>
+        <input class="form-input" type="number" id="ef-lab" value="${r.labour_cost||0}"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Other Cost (₹)</label>
+      <input class="form-input" type="number" id="ef-other" value="${r.other_cost||0}"/>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveReportFinance('${reportId}','${jobId}')">Save</button>
+    </div>`);
+}
+
+async function saveReportFinance(reportId,jobId){
+  const {error}=await sb.from('daily_reports').update({
+    material_cost:parseFloat(document.getElementById('ef-mat').value)||0,
+    labour_cost:parseFloat(document.getElementById('ef-lab').value)||0,
+    other_cost:parseFloat(document.getElementById('ef-other').value)||0,
+    finance_edited_by:STATE.profile?.id,
+    finance_edited_at:new Date().toISOString(),
+    updated_at:new Date().toISOString()
+  }).eq('id',reportId);
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Finance updated!','success');closeModal();await loadAllData();openJobDetail(jobId);
+}
+</script>
+
+<!-- ── PDF GENERATION ── -->
+<script>
+function downloadJobPDF(jobId){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  const j=STATE.data.jobs.find(x=>x.id===jobId);
+  const fin=STATE.data.financials.find(x=>x.job_id===jobId);
+  const reports=STATE.data.dailyReports.filter(r=>r.job_id===jobId).sort((a,b)=>a.report_date.localeCompare(b.report_date));
+  const plans=STATE.data.dailyPlans.filter(p=>p.job_id===jobId).sort((a,b)=>a.plan_date.localeCompare(b.plan_date));
+
+  const blue=[30,64,175];const darkBlue=[15,30,86];const gray=[100,116,139];const lightGray=[248,250,252];
+
+  // ── PAGE 1: Header
+  doc.setFillColor(...darkBlue);doc.rect(0,0,210,38,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont('helvetica','bold');
+  doc.text('HANDY SQUAD',14,16);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text('Job Completion Report',14,24);
+  doc.text('Generated: '+new Date().toLocaleDateString('en-IN'),14,30);
+
+  doc.setTextColor(...darkBlue);doc.setFontSize(15);doc.setFont('helvetica','bold');
+  doc.text(j?.customer_name||'Job Report',14,50);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(...gray);
+  doc.text((j?.location_text||'')+(j?.customer_phone?' · '+j.customer_phone:''),14,57);
+  doc.text('Status: '+(j?.status||'—')+' · Start: '+fmtDate(j?.start_date)+(j?.completion_date?' · Completed: '+fmtDate(j.completion_date):''),14,63);
+
+  if(j?.work_details){
+    doc.setFontSize(8);doc.setTextColor(...gray);doc.text('Work Details:',14,72);
+    doc.setTextColor(30,41,59);
+    const lines=doc.splitTextToSize(j.work_details,182);
+    doc.text(lines,14,78);
+  }
+
+  // ── Financial Summary
+  let y=fin?100:90;
+  if(fin){
+    doc.setFillColor(...blue);doc.rect(0,90,210,8,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont('helvetica','bold');
+    doc.text('FINANCIAL SUMMARY',14,95.5);
+
+    const actualSpend=(fin.material_actual||0)+(fin.labour_actual||0)+(fin.other_actual||0);
+    const netValue=(fin.total_amount||0)-((fin.total_amount||0)*(fin.gst_rate||18)/100);
+    const runProfit=netValue-actualSpend;
+
+    doc.autoTable({
+      startY:100,
+      head:[['Item','Expected','Actual']],
+      body:[
+        ['Contract Value','₹'+fmt(fin.total_amount||0),'—'],
+        ['GST ('+fin.gst_rate+'%)','₹'+fmt((fin.total_amount||0)*(fin.gst_rate||18)/100),'—'],
+        ['Net Value','₹'+fmt(netValue),'—'],
+        ['Material','₹'+fmt(fin.material_expected||0),'₹'+fmt(fin.material_actual||0)],
+        ['Labour','₹'+fmt(fin.labour_expected||0),'₹'+fmt(fin.labour_actual||0)],
+        ['Other','₹'+fmt(fin.other_expected||0),'₹'+fmt(fin.other_actual||0)],
+        ['PROFIT','₹'+fmt(fin.expected_profit||0),'₹'+fmt(runProfit)]
+      ],
+      theme:'striped',
+      headStyles:{fillColor:blue,fontSize:8},
+      bodyStyles:{fontSize:8},
+      columnStyles:{1:{halign:'right'},2:{halign:'right'}},
+      rowPageBreak:'auto'
+    });
+    y=doc.lastAutoTable.finalY+10;
+  }
+
+  // ── Daily Plans
+  if(plans.length>0){
+    if(y>240){doc.addPage();y=20;}
+    doc.setFillColor(...blue);doc.rect(0,y,210,8,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont('helvetica','bold');
+    doc.text('DAILY PLANS ('+plans.length+')',14,y+5.5);
+    doc.autoTable({
+      startY:y+10,
+      head:[['Date','Workers','Plan']],
+      body:plans.map(p=>[fmtDate(p.plan_date),p.workers||0,p.plan_text]),
+      theme:'striped',
+      headStyles:{fillColor:blue,fontSize:8},
+      bodyStyles:{fontSize:8},
+      columnStyles:{0:{cellWidth:25},1:{cellWidth:18},2:{cellWidth:147}}
+    });
+    y=doc.lastAutoTable.finalY+10;
+  }
+
+  // ── Daily Reports
+  if(reports.length>0){
+    if(y>240){doc.addPage();y=20;}
+    doc.setFillColor(...blue);doc.rect(0,y,210,8,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont('helvetica','bold');
+    doc.text('DAILY REPORTS ('+reports.length+')',14,y+5.5);
+    doc.autoTable({
+      startY:y+10,
+      head:[['Date','Workers','Work Done','Material','Labour','Other','Total']],
+      body:reports.map(r=>[
+        fmtDate(r.report_date),r.workers_present||0,r.work_done,
+        '₹'+fmt(r.material_cost||0),'₹'+fmt(r.labour_cost||0),'₹'+fmt(r.other_cost||0),
+        '₹'+fmt((r.material_cost||0)+(r.labour_cost||0)+(r.other_cost||0))
+      ]),
+      foot:[['','','TOTAL',
+        '₹'+fmt(reports.reduce((s,r)=>s+(r.material_cost||0),0)),
+        '₹'+fmt(reports.reduce((s,r)=>s+(r.labour_cost||0),0)),
+        '₹'+fmt(reports.reduce((s,r)=>s+(r.other_cost||0),0)),
+        '₹'+fmt(reports.reduce((s,r)=>s+(r.material_cost||0)+(r.labour_cost||0)+(r.other_cost||0),0))
+      ]],
+      theme:'striped',
+      headStyles:{fillColor:blue,fontSize:7},
+      footStyles:{fillColor:darkBlue,textColor:[255,255,255],fontStyle:'bold',fontSize:7},
+      bodyStyles:{fontSize:7},
+      columnStyles:{2:{cellWidth:60},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'}}
+    });
+  }
+
+  // ── Footer on each page
+  const pgCount=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pgCount;i++){
+    doc.setPage(i);
+    doc.setFillColor(248,250,252);doc.rect(0,285,210,12,'F');
+    doc.setFontSize(7);doc.setTextColor(...gray);
+    doc.text('Handy Squad · Job Tracker · Confidential',14,291);
+    doc.text(`Page ${i} of ${pgCount}`,196,291,{align:'right'});
+  }
+
+  doc.save(`HSquad_${(j?.customer_name||'job').replace(/\s/g,'_')}_Report.pdf`);
+  showToast('PDF downloaded!','success');
+}
+
+function downloadAdvanceForm(jobId){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  const j=STATE.data.jobs.find(x=>x.id===jobId);
+  const fin=STATE.data.financials.find(x=>x.job_id===jobId);
+
+  const blue=[30,64,175];const darkBlue=[15,30,86];const gray=[100,116,139];
+
+  // Header
+  doc.setFillColor(...darkBlue);doc.rect(0,0,210,32,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(18);doc.setFont('helvetica','bold');
+  doc.text('ADVANCE REQUEST FORM',14,14);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');
+  doc.text('Handy Squad — Field Management System',14,21);
+  doc.text('Date: '+new Date().toLocaleDateString('en-IN'),14,27);
+
+  // Job Info
+  doc.setFillColor(239,246,255);doc.rect(0,34,210,22,'F');
+  doc.setTextColor(...darkBlue);doc.setFontSize(10);doc.setFont('helvetica','bold');
+  doc.text('JOB INFORMATION',14,42);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(30,41,59);
+  doc.text('Customer: '+(j?.customer_name||'—'),14,49);
+  doc.text('Location: '+(j?.location_text||'—'),14,53);
+  doc.text('Start Date: '+fmtDate(j?.start_date),100,49);
+  doc.text('Status: '+(j?.status||'—'),100,53);
+
+  let y=62;
+
+  // Financial Breakdown Table
+  doc.setFillColor(...blue);doc.rect(0,y,210,8,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont('helvetica','bold');
+  doc.text('ADVANCE AMOUNT BREAKDOWN',14,y+5.5);
+  y+=10;
+
+  doc.autoTable({
+    startY:y,
+    head:[['Category','Expected Amount','Notes']],
+    body:[
+      ['Material Cost','₹ '+(fin?Number(fin.material_expected).toLocaleString('en-IN'):'__________'),''],
+      ['Labour Cost','₹ '+(fin?Number(fin.labour_expected).toLocaleString('en-IN'):'__________'),''],
+      ['Other Expenses','₹ '+(fin?Number(fin.other_expected).toLocaleString('en-IN'):'__________'),''],
+      ['TOTAL ADVANCE','₹ '+(fin?Number((fin.material_expected||0)+(fin.labour_expected||0)+(fin.other_expected||0)).toLocaleString('en-IN'):'__________'),'']
+    ],
+    theme:'grid',
+    headStyles:{fillColor:blue,fontSize:8},
+    bodyStyles:{fontSize:9,minCellHeight:10},
+    columnStyles:{1:{halign:'right',fontStyle:'bold'},2:{cellWidth:60}},
+    didDrawRow:(data)=>{if(data.row.index===3){data.row.cells[0].styles.fontStyle='bold';data.row.cells[0].styles.fillColor=[239,246,255];}}
+  });
+  y=doc.lastAutoTable.finalY+8;
+
+  // Contract & Profit
+  if(fin){
+    doc.setFontSize(8);doc.setTextColor(...gray);
+    doc.text('Total Contract Value: ₹'+Number(fin.total_amount||0).toLocaleString('en-IN'),14,y);
+    doc.text('GST Deduction ('+fin.gst_rate+'%): ₹'+Number((fin.total_amount||0)*(fin.gst_rate||18)/100).toLocaleString('en-IN'),14,y+5);
+    doc.setTextColor(...darkBlue);doc.setFont('helvetica','bold');
+    doc.text('Expected Profit: ₹'+Number(fin.expected_profit||0).toLocaleString('en-IN'),14,y+10);
+    y+=18;
+  }
+
+  // Work Details
+  if(j?.work_details){
+    doc.setFillColor(248,250,252);doc.rect(14,y,182,3+(doc.splitTextToSize(j.work_details,170).length*4),'F');
+    doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(...gray);doc.text('Scope of Work:',16,y+3.5);
+    doc.setTextColor(30,41,59);doc.text(doc.splitTextToSize(j.work_details,170),16,y+8);
+    y+=14+doc.splitTextToSize(j.work_details,170).length*4;
+  }
+
+  y+=6;
+
+  // Approval Signatures
+  doc.setFillColor(...blue);doc.rect(0,y,210,8,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont('helvetica','bold');
+  doc.text('APPROVALS',14,y+5.5);
+  y+=12;
+
+  const sigBoxes=[
+    ['Prepared By','Field Manager / Scheduling Team'],
+    ['Approved By (Manager/COO)','Signature with Date'],
+    ['Approved By (Accounts/Admin)','Signature with Date']
+  ];
+
+  sigBoxes.forEach((box,i)=>{
+    const x=14+(i%2===0?0:96);
+    const bW=88;
+    if(i===2){
+      // Full width for accounts
+      doc.setDrawColor(...gray);doc.setLineWidth(0.3);
+      doc.rect(14,y,182,22);
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...darkBlue);
+      doc.text(box[0],16,y+5);
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...gray);
+      doc.text(box[1],16,y+9);
+      doc.setDrawColor(200,210,220);doc.line(16,y+18,190,y+18);
+      doc.text('Signature & Date',16,y+21);
+      y+=26;
+    } else {
+      doc.setDrawColor(...gray);doc.setLineWidth(0.3);
+      doc.rect(x,y,bW,22);
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(...darkBlue);
+      doc.text(box[0],x+2,y+5);
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...gray);
+      doc.text(box[1],x+2,y+9);
+      doc.setDrawColor(200,210,220);doc.line(x+2,y+18,x+bW-2,y+18);
+      doc.text('Signature & Date',x+2,y+21);
+      if(i===1)y+=26;
+    }
+  });
+
+  // Footer
+  doc.setFillColor(248,250,252);doc.rect(0,285,210,12,'F');
+  doc.setFontSize(7);doc.setTextColor(...gray);
+  doc.text('Handy Squad · Advance Request Form · Confidential',14,291);
+  doc.text('Form generated: '+new Date().toLocaleString('en-IN'),196,291,{align:'right'});
+
+  doc.save(`HSquad_Advance_${(j?.customer_name||'job').replace(/\s/g,'_')}.pdf`);
+  showToast('Advance form downloaded!','success');
+}
+</script>
+</body>
+</html>
