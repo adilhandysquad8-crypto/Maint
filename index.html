@@ -364,12 +364,26 @@ function showApp(){
   buildSidebar();renderPage('dashboard');loadAllData();
 }
 
-async function loadProfile(){
-  const {data}=await sb.from('users').select('*').eq('auth_id',STATE.user.id).maybeSingle();
-  if(data){STATE.profile=data;STATE.role=data.role;return;}
-  const name=STATE.user.user_metadata?.name||STATE.user.email.split('@')[0];
-  STATE.profile={id:STATE.user.id,name,role:'scheduling',email:STATE.user.email};
-  STATE.role='scheduling';
+async function loadProfile() {
+  const { data } = await sb.from('users').select('*').eq('id', STATE.user.id).maybeSingle();
+  if (data) {
+    STATE.profile = data;
+    STATE.role = data.role;
+    return;
+  }
+  // First login — create the user row
+  const name = STATE.user.user_metadata?.name || STATE.user.email.split('@')[0];
+  const role = STATE.user.user_metadata?.role || 'scheduling';
+  const { data: created } = await sb.from('users').upsert({
+    id: STATE.user.id,   // auth UUID becomes the row ID
+    name,
+    role,
+    email: STATE.user.email,
+    phone: STATE.user.user_metadata?.phone || null
+  }, { onConflict: 'id' }).select().single();
+
+  STATE.profile = created || { id: STATE.user.id, name, role, email: STATE.user.email };
+  STATE.role = STATE.profile.role;
 }
 
 async function handleLogin(){
