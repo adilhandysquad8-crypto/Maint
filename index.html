@@ -438,7 +438,7 @@ function buildSidebar(){
 async function loadAllData(){
   try{
     const [jobs,fins,plans,reports,images,users]=await Promise.all([
-      sb.from('jobs').select('*, users!jobs_assigned_manager_id_fkey(name)').order('created_at',{ascending:false}),
+      sb.from('jobs').select('*, assigned_manager:users!assigned_manager_id(name)').order('created_at',{ascending:false}),
       sb.from('job_financials').select('*').order('created_at',{ascending:false}),
       sb.from('daily_plans').select('*').order('plan_date',{ascending:false}),
       sb.from('daily_reports').select('*').order('report_date',{ascending:false}),
